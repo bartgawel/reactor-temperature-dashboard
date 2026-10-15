@@ -10,7 +10,7 @@
 </style>
 </head>
 <body><header><h1>Reactor Temperature Dashboard</h1><p>Interactive analysis · Excel Office.js + Plotly · KPI_MaxTemperature</p></header>
-<main><div class="toolbar"><button id="loadExcel">Read active Excel sheet</button><button class="secondary" id="downloadCsv" disabled>Export filtered CSV</button><label class="upload">Or open CSV: <input type="file" id="csvFile" accept=".csv,text/csv"/></label></div>
+<main><div class="toolbar"><button id="loadExcel">Read active Excel sheet</button><button id="insertDashboard" disabled>Insert / Refresh Dashboard</button><button id="enableStartup" class="secondary">Enable refresh on workbook open</button><button class="secondary" id="downloadCsv" disabled>Export filtered CSV</button><label class="upload">Or open CSV: <input type="file" id="csvFile" accept=".csv,text/csv"/></label></div>
 <div id="status" class="message">Choose a worksheet containing the requested headers, then click “Read active Excel sheet”.</div>
 <div class="layout"><section class="panel"><h2>Filters</h2><div class="btnRow"><button class="secondary" id="clearFilters">Reset all filters</button></div><div id="filterList"></div></section>
 <section class="chartbox"><div class="metrics"><div class="metric"><strong id="n">–</strong><span>Records displayed</span></div><div class="metric"><strong id="mean">–</strong><span>Mean temperature (°C)</span></div><div class="metric"><strong id="min">–</strong><span>Min temperature (°C)</span></div><div class="metric"><strong id="max">–</strong><span>Max temperature (°C)</span></div></div>
@@ -29,7 +29,7 @@ const FIELDS=[
 ];
 const DATE='EventTimestamp_process_end',TEMP='KPI_MaxTemperature';
 const META=FIELDS.filter(k=>![DATE,TEMP].includes(k));
-const state={rows:[],filtered:[],criteria:{},filterDefs:{},fileName:'',refreshing:false};
+const state={rows:[],filtered:[],criteria:{},filterDefs:{},fileName:'',refreshing:false,sourceSheet:'',sourceKind:''};
 const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=s=>String(s??'').trim().normalize('NFKC').toLocaleLowerCase();
 function safeNum(v){if(v===null||v===undefined||v==='')return NaN;if(typeof v==='number')return Number.isFinite(v)?v:NaN;let s=String(v).trim().replace(/\s/g,'');if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(/^[-+]?\d+,\d+$/.test(s))s=s.replace(',','.');return Number(s)}
@@ -37,11 +37,11 @@ function toDate(v){if(v instanceof Date)return Number.isFinite(v.getTime())?v:nu
 function timeISO(d){return d?d.toISOString().replace('T',' ').slice(0,19):''}
 function setStatus(s){$('status').textContent=s}
 function fillRows(raw,headers,source){let indices=FIELDS.map(f=>headers.findIndex(h=>norm(h)===norm(f)));let missing=FIELDS.filter((f,i)=>indices[i]<0);if(missing.length){throw Error('Missing required columns: '+missing.join(', ')+'. Recipe Name is intentionally not needed.')}
- state.rows=[];raw.forEach((values,i)=>{if(!values.some(v=>v!==null&&v!==''&&v!==undefined))return;let r={_row:i+2};FIELDS.forEach((k,j)=>r[k]=values[indices[j]]??'');r._date=toDate(r[DATE]);r._temperature=safeNum(r[TEMP]);state.rows.push(r)});state.criteria={};state.fileName=source;renderControls();applyFilters();setStatus(`${state.rows.length.toLocaleString()} rows loaded from ${source}. Select any combination of filters.`)}
-async function readExcel(){if(state.refreshing)return;if(!window.Excel||!Excel.run){setStatus('Excel is not available in this browser tab. Use CSV import for a preview, or open through the Excel add-in.');return}
- state.refreshing=true;$('loadExcel').disabled=true;try{setStatus('Reading worksheet headers…');let headers=[],nRows=0,minCol=0,maxCol=0;let collected=[];await Excel.run(async ctx=>{let sheet=ctx.workbook.worksheets.getActiveWorksheet();let used=sheet.getUsedRangeOrNullObject();used.load(['rowCount','columnCount','columnIndex','rowIndex','isNullObject']);await ctx.sync();if(used.isNullObject)throw Error('Active worksheet is empty.');let hdr=sheet.getRangeByIndexes(0,used.columnIndex,1,used.columnCount);hdr.load('values');await ctx.sync();headers=hdr.values[0];let indices=FIELDS.map(f=>headers.findIndex(h=>norm(h)===norm(f)));let missing=FIELDS.filter((f,i)=>indices[i]<0);if(missing.length)throw Error('Missing columns: '+missing.join(', '));minCol=used.columnIndex+Math.min(...indices);maxCol=used.columnIndex+Math.max(...indices);nRows=used.rowIndex+used.rowCount-1;
+ state.sourceKind=source;state.rows=[];raw.forEach((values,i)=>{if(!values.some(v=>v!==null&&v!==''&&v!==undefined))return;let r={_row:i+2};FIELDS.forEach((k,j)=>r[k]=values[indices[j]]??'');r._date=toDate(r[DATE]);r._temperature=safeNum(r[TEMP]);state.rows.push(r)});state.criteria={};state.fileName=source;$('insertDashboard').disabled=source !== 'Excel workbook';renderControls();applyFilters();setStatus(`${state.rows.length.toLocaleString()} rows loaded from ${source}. Select any combination of filters.`)}
+async function readExcel(preferredSheet, autoInsert=false){if(state.refreshing)return;if(!window.Excel||!Excel.run){setStatus('Excel is not available in this browser tab. Use CSV import for a preview, or open through the Excel add-in.');return}
+ state.refreshing=true;$('loadExcel').disabled=true;try{setStatus('Reading worksheet headers…');let headers=[],nRows=0,minCol=0,maxCol=0;let collected=[];await Excel.run(async ctx=>{let sheet=preferredSheet?ctx.workbook.worksheets.getItem(preferredSheet):ctx.workbook.worksheets.getActiveWorksheet();sheet.load('name');let used=sheet.getUsedRangeOrNullObject();used.load(['rowCount','columnCount','columnIndex','rowIndex','isNullObject']);await ctx.sync();if(used.isNullObject)throw Error('Active worksheet is empty.');let hdr=sheet.getRangeByIndexes(0,used.columnIndex,1,used.columnCount);hdr.load('values');await ctx.sync();headers=hdr.values[0];state.sourceSheet=sheet.name;let indices=FIELDS.map(f=>headers.findIndex(h=>norm(h)===norm(f)));let missing=FIELDS.filter((f,i)=>indices[i]<0);if(missing.length)throw Error('Missing columns: '+missing.join(', '));minCol=used.columnIndex+Math.min(...indices);maxCol=used.columnIndex+Math.max(...indices);nRows=used.rowIndex+used.rowCount-1;
  // Bounded reads help avoid Excel Online payload and cell limits.
- const CHUNK=450;for(let start=1;start<=nRows;start+=CHUNK){let count=Math.min(CHUNK,nRows-start+1);let rg=sheet.getRangeByIndexes(start,minCol,count,maxCol-minCol+1);rg.load('values');await ctx.sync();for(let r of rg.values){let full=new Array(headers.length).fill('');for(let c=minCol;c<=maxCol;c++)full[c-used.columnIndex]=r[c-minCol];collected.push(full)}if(start===1||Math.floor(start/CHUNK)%15===0)setStatus(`Reading Excel: ${Math.min(start+count-1,nRows).toLocaleString()} / ${nRows.toLocaleString()} rows…`)} });fillRows(collected,headers,'active Excel worksheet')}
+ const CHUNK=450;for(let start=1;start<=nRows;start+=CHUNK){let count=Math.min(CHUNK,nRows-start+1);let rg=sheet.getRangeByIndexes(start,minCol,count,maxCol-minCol+1);rg.load('values');await ctx.sync();for(let r of rg.values){let full=new Array(headers.length).fill('');for(let c=minCol;c<=maxCol;c++)full[c-used.columnIndex]=r[c-minCol];collected.push(full)}if(start===1||Math.floor(start/CHUNK)%15===0)setStatus(`Reading Excel: ${Math.min(start+count-1,nRows).toLocaleString()} / ${nRows.toLocaleString()} rows…`)} });fillRows(collected,headers,'Excel workbook');if(autoInsert)await insertDashboard(true)}
  catch(e){setStatus('Excel read failed: '+(e.message||e))}finally{state.refreshing=false;$('loadExcel').disabled=false}}
 // CSV reader supports common quoted fields, delimiters, and line endings.
 function parseCSV(txt){let firstLine=txt.split(/\r?\n/,1)[0],delimiter=['\t',';',','].sort((a,b)=>firstLine.split(b).length-firstLine.split(a).length)[0];let out=[],row=[],field='',quoted=false;for(let i=0;i<txt.length;i++){let ch=txt[i];if(ch==='"'){if(quoted&&txt[i+1]==='"'){field+='"';i++}else quoted=!quoted}else if(ch===delimiter&&!quoted){row.push(field);field=''}else if((ch==='\r'||ch==='\n')&&!quoted){if(ch==='\r'&&txt[i+1]==='\n')i++;row.push(field);if(row.some(v=>v.trim()!==''))out.push(row);row=[];field=''}else field+=ch}row.push(field);if(row.some(v=>v.trim()!==''))out.push(row);return out}
@@ -93,6 +93,90 @@ function draw(){let plotRows=state.filtered.filter(r=>r._date&&Number.isFinite(r
  setStatus(`${state.rows.length.toLocaleString()} loaded; ${state.filtered.length.toLocaleString()} after filters; ${plotRows.length.toLocaleString()} plotted with valid dates and temperatures.`)}
 function csvEscape(v){let s=String(v??'');return /[",\r\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
 function exportCsv(){let arr=[FIELDS.join(',')];for(let r of state.filtered)arr.push(FIELDS.map(k=>csvEscape(r[k])).join(','));let b=new Blob(['\ufeff'+arr.join('\r\n')],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='reactor_temperature_filtered.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
-$('loadExcel').addEventListener('click',readExcel);$('csvFile').addEventListener('change',async e=>{let f=e.target.files[0];if(!f)return;try{let data=parseCSV(await f.text());if(!data.length)throw Error('Empty CSV');fillRows(data.slice(1),data[0],f.name)}catch(err){setStatus('CSV import failed: '+err.message)}});$('downloadCsv').addEventListener('click',exportCsv);$('clearFilters').addEventListener('click',()=>{if(state.rows.length){renderControls();applyFilters()}});for(let k of ['colorBy','chartType','showTrend'])$(k).addEventListener('change',()=>state.rows.length&&draw());
-if(window.Office){Office.onReady(info=>{if(info.host===Office.HostType.Excel)setStatus('Excel connected. Open your data sheet and click “Read active Excel sheet”.');else setStatus('Open in Excel or load a CSV for browser preview.')})}
+
+// ===== Embedded Excel dashboard / per-workbook start-up =====
+const BOARD='Reactor_Dashboard';
+const IMG_NAMES=['reactorDash_Time','reactorDash_Reactor','reactorDash_Product','reactorDash_Water'];
+const CHART_NODES=['plot','reactorComparison','productComparison','waterComparison'];
+const CHART_LABELS=['Process temperature versus time','Mean maximum temperature by reactor','Mean maximum temperature by product','Mean maximum temperature by water temperature'];
+const SOURCE_SETTING='ReactorDataSheet';
+async function storedSourceSheet(){
+ return Excel.run(async ctx=>{const item=ctx.workbook.settings.getItemOrNullObject(SOURCE_SETTING);item.load(['value','isNullObject']);await ctx.sync();return item.isNullObject?null:String(item.value)});
+}
+async function saveSourceSheet(sheetName){
+ await Excel.run(async ctx=>{ctx.workbook.settings.add(SOURCE_SETTING,sheetName);await ctx.sync()});
+}
+async function chartPNGs(){
+ // Plotly is interactive in task pane, but embedded Excel shapes are persistent image snapshots.
+ if(!window.Plotly)throw Error('Plotly is unavailable. Check the network connection.');
+ const result=[];
+ for(let i=0;i<CHART_NODES.length;i++){
+  const el=$(CHART_NODES[i]);
+  if(!el || !el.data)throw Error('Chart '+CHART_NODES[i]+' is not rendered.');
+  // toImage avoids exporting the entire task pane and provides crisp charts at workbook size.
+  const uri=await Plotly.toImage(el,{format:'png',width:i===0?1200:800,height:i===0?540:440,scale:1.25});
+  result.push(uri.slice(uri.indexOf(',')+1));
+ }
+ return result;
+}
+async function insertDashboard(silent=false){
+ if(!window.Excel||!Excel.run)throw Error('Open the dashboard inside Excel to insert charts.');
+ if(!state.rows.length)throw Error('Load the source data first.');
+ $('insertDashboard').disabled=true;
+ try{
+  setStatus('Rendering four charts for insertion into the workbook…');
+  // Make sure the most recent Plotly render has completed.
+  await Promise.all(CHART_NODES.map(id=>$(id)?Plotly.redraw($(id)):Promise.resolve()));
+  const png=await chartPNGs();
+  await Excel.run(async ctx=>{
+   const wb=ctx.workbook;
+   const target=wb.worksheets.getItemOrNullObject(BOARD);
+   target.load('isNullObject');await ctx.sync();
+   const ws=target.isNullObject?wb.worksheets.add(BOARD):target;
+   const old=ws.shapes;old.load('items/name');await ctx.sync();
+   // Delete ONLY images this add-in previously created; preserve user drawings.
+   old.items.forEach(shape=>{if(IMG_NAMES.includes(shape.name))shape.delete()});
+   const coords=[[20,105,1060,450],[20,610,510,335],[570,610,510,335],[20,990,720,380]];
+   png.forEach((base64,i)=>{
+    const sh=ws.shapes.addImage(base64);sh.name=IMG_NAMES[i];
+    sh.left=coords[i][0];sh.top=coords[i][1];sh.width=coords[i][2];sh.height=coords[i][3];
+   });
+   ws.getRange('A1').values=[['REACTOR TEMPERATURE DASHBOARD']];
+   ws.getRange('A2').values=[['Source worksheet: '+state.sourceSheet]];
+   ws.getRange('A3').values=[['Filtered records: '+state.filtered.length+' | Chart-ready records: '+state.filtered.filter(r=>r._date&&Number.isFinite(r._temperature)).length]];
+   ws.getRange('A4').values=[['Chart images refresh from the Excel add-in. Interactive filters and hover details remain in the task pane.']];
+   ws.getRange('A5').values=[['Last refresh: '+new Date().toISOString().replace('T',' ').slice(0,19)+' UTC']];
+   ws.getRange('A1:A5').format.columnWidth=620;
+   ws.getRange('A1').format.font.bold=true;
+   ws.getRange('A1').format.font.size=17;
+   await ctx.sync();
+  });
+  if(state.sourceSheet)await saveSourceSheet(state.sourceSheet);
+  setStatus('Four charts inserted/refreshed in worksheet "'+BOARD+'". Save the workbook to keep them.');
+ }catch(e){setStatus('Could not insert charts: '+(e.message||e));if(!silent)throw e}
+ finally{$('insertDashboard').disabled=!state.rows.length||state.sourceKind!=='Excel workbook'}
+}
+async function enableOpenRefresh(){
+ if(!window.Office||!Office.addin?.setStartupBehavior)throw Error('Your Excel client/add-in does not support startup behavior. A shared-runtime manifest is required.');
+ if(!state.sourceSheet)throw Error('Load the source worksheet first, then enable startup.');
+ await saveSourceSheet(state.sourceSheet);
+ await Office.addin.setStartupBehavior(Office.StartupBehavior.load);
+ setStatus('Workbook startup enabled. Save, close and reopen this workbook to test automatic refresh. This depends on Excel shared-runtime support.');
+}
+let startupChecked=false;
+async function refreshOnOpen(){
+ if(startupChecked||!window.Excel||!Excel.run)return;
+ startupChecked=true;
+ try{
+  const chosen=await storedSourceSheet();
+  if(!chosen)return; // First-time setup is intentionally manual.
+  // No reliance on the currently active worksheet: dashboard may be active at open.
+  await readExcel(chosen,true);
+ }catch(e){setStatus('Automatic refresh unavailable: '+(e.message||e)+'. Use Read active Excel sheet, then Insert / Refresh Dashboard.');}
+}
+$('insertDashboard').addEventListener('click',()=>insertDashboard().catch(()=>{}));
+$('enableStartup').addEventListener('click',()=>enableOpenRefresh().catch(e=>setStatus('Startup configuration failed: '+(e.message||e))));
+
+$('loadExcel').addEventListener('click',()=>readExcel());$('csvFile').addEventListener('change',async e=>{let f=e.target.files[0];if(!f)return;try{let data=parseCSV(await f.text());if(!data.length)throw Error('Empty CSV');fillRows(data.slice(1),data[0],f.name)}catch(err){setStatus('CSV import failed: '+err.message)}});$('downloadCsv').addEventListener('click',exportCsv);$('clearFilters').addEventListener('click',()=>{if(state.rows.length){renderControls();applyFilters()}});for(let k of ['colorBy','chartType','showTrend'])$(k).addEventListener('change',()=>state.rows.length&&draw());
+if(window.Office){Office.onReady(info=>{if(info.host===Office.HostType.Excel){setStatus('Excel connected. Read the data sheet, then Insert / Refresh Dashboard.');refreshOnOpen();}else setStatus('Open in Excel or load a CSV for browser preview.')})}
 </script></body></html>
