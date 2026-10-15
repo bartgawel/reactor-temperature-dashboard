@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="ContentApp">
+  <Id>c650e7bc-77ee-46ef-9058-6b122e7eb198</Id>
+  <Version>1.0.0.0</Version><ProviderName>Analytics</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Reactor Plotly Dashboard (Embedded)"/>
+  <Description DefaultValue="Interactive Plotly reactor dashboard embedded into an Excel worksheet."/>
+  <IconUrl DefaultValue="https://bartgawel.github.io/reactor-temperature-dashboard/icon.png"/>
+  <SupportUrl DefaultValue="https://bartgawel.github.io/reactor-temperature-dashboard/"/>
+  <AppDomains><AppDomain>https://bartgawel.github.io</AppDomain></AppDomains>
+  <Hosts><Host Name="Workbook"/></Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://bartgawel.github.io/reactor-temperature-dashboard/content.html"/>
+    <RequestedWidth>980</RequestedWidth>
+    <RequestedHeight>720</RequestedHeight>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <AllowSnapshot>true</AllowSnapshot>
+</OfficeApp>
