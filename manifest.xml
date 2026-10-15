@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="TaskPaneApp">
-<Id>873c1aa8-a105-4cb3-8688-4e93ed716b64</Id><Version>1.0.0.0</Version><ProviderName>Analytics</ProviderName><DefaultLocale>en-US</DefaultLocale><DisplayName DefaultValue="Reactor Temperature Dashboard"/><Description DefaultValue="Plotly reactor temperature dashboard with interactive filters from Excel."/>
-<IconUrl DefaultValue="https://YOUR-USERNAME.github.io/reactor-temperature-dashboard/icon.png"/><SupportUrl DefaultValue="https://YOUR-USERNAME.github.io/reactor-temperature-dashboard/"/>
-<AppDomains><AppDomain>https://YOUR-USERNAME.github.io</AppDomain></AppDomains>
-<Hosts><Host Name="Workbook"/></Hosts><DefaultSettings><SourceLocation DefaultValue="https://YOUR-USERNAME.github.io/reactor-temperature-dashboard/taskpane.html"/></DefaultSettings><Permissions>ReadDocument</Permissions>
-</OfficeApp>
